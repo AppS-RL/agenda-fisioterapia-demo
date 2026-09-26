@@ -25,11 +25,12 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .brand-mark{background:linear-gradient(145deg,#8fc096,#27546b)}
 .eyebrow,.hero h1 em{color:#5f9d6b}
 .primary-btn{background:var(--wine);box-shadow:0 10px 24px #27546b2b}.primary-btn:hover{background:var(--wine2)}
-.hero-art{background:linear-gradient(180deg,#b4e0ee 0%,#9dccd0 100%);overflow:hidden}
-.hero-art:after{content:"";position:absolute;inset:40px 18px 0;background:url("../assets/figura-fisio-teal.png") center bottom/contain no-repeat;opacity:.95}
-.hero-art:before{border-color:#27546b33;z-index:1}
-.hero-art p{align-self:start;margin-top:75px;font-size:34px;color:var(--wine);z-index:2}
+.hero-art{height:430px;max-width:430px;aspect-ratio:1;border-radius:50%;background:#e8f5f5;overflow:hidden;justify-self:center;box-shadow:0 22px 60px #27546b1f}
+.hero-art:after{content:"";position:absolute;inset:58px 74px 118px;background:url("../assets/logo-fisioterapia.png") center/contain no-repeat;opacity:1}
+.hero-art:before{inset:18px;width:auto;height:auto;border-color:#27546b24;border-radius:50%;z-index:1}
+.hero-art p{position:absolute;left:30px;right:30px;bottom:42px;margin:0;font-size:27px;color:var(--wine);z-index:2}
 .polish,.sparkle{display:none}
 .service-card.selected{border-color:var(--wine);background:#e9f5e7}
 .selected-service-item button{background:#cbe6c7;color:#27546b}
 .location-btn{background:var(--wine)}
+@media(max-width:560px){.hero-art{height:auto;max-width:330px;width:100%}.hero-art:after{inset:45px 58px 96px}.hero-art p{bottom:32px;font-size:23px}}
