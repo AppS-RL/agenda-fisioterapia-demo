@@ -39,7 +39,12 @@
   const readList=key=>{try{const value=JSON.parse(localStorage.getItem(key));return Array.isArray(value)?value:[]}catch{return[]}};
   const getAppointments=()=>readList(CONFIG.appointmentStorage);
   const getPatients=()=>readList(CONFIG.patientStorage);
-  const savePatients=items=>localStorage.setItem(CONFIG.patientStorage,JSON.stringify(items));
+  const savePatients=items=>{
+    const before=getPatients(),beforeById=new Map(before.map(item=>[item.id,item])),afterIds=new Set(items.map(item=>item.id));
+    localStorage.setItem(CONFIG.patientStorage,JSON.stringify(items));
+    items.forEach(item=>{const old=beforeById.get(item.id);if(!old||old.updatedAt!==item.updatedAt)window.CloudPatients?.upsert(item).catch(()=>{})});
+    before.forEach(item=>{if(!afterIds.has(item.id))window.CloudPatients?.remove(item.id).catch(()=>{})});
+  };
   const getPatient=id=>getPatients().find(item=>item.id===id);
   const getService=id=>SERVICES.find(item=>item.id===id)||{id:id||"service",name:legacyServiceName(id)};
 
@@ -77,6 +82,21 @@
   }
   function retentionCutoffISO(){const cutoff=new Date();cutoff.setMonth(cutoff.getMonth()-RETENTION_MONTHS);return toISO(cutoff)}
   function pruneLocalAppointments(){const current=getAppointments().filter(item=>!item?.date||item.date>=retentionCutoffISO());saveAppointments(current);return current}
+  async function hydratePatients(){
+    if(!window.CloudPatients?.list)return null;
+    try{
+      const cloud=await window.CloudPatients.list();
+      if(!Array.isArray(cloud))return null;
+      const local=getPatients(),cloudById=new Map(cloud.map(item=>[item.id,item])),merged=new Map(cloudById);
+      local.forEach(item=>{
+        const remote=cloudById.get(item.id),localIsNewer=!remote||String(item.updatedAt||"")>String(remote.updatedAt||"");
+        if(localIsNewer){merged.set(item.id,item);window.CloudPatients.upsert(item).catch(()=>{})}
+      });
+      localStorage.setItem(CONFIG.patientStorage,JSON.stringify([...merged.values()]));
+      fillPatientOptions();render();
+      return[...merged.values()];
+    }catch(error){console.warn("Se usará la copia local de pacientes:",error.message);return null}
+  }
 
   function patientPackageText(patient){
     const size=Number(patient?.packageSize)||0,remaining=Number(patient?.sessionsRemaining)||0;
@@ -332,4 +352,5 @@
 
   pruneLocalAppointments();fillPatientOptions();render();window.refreshAgenda=()=>{fillPatientOptions();render()};
   window.CloudAppointments?.hydrate(items=>localStorage.setItem(CONFIG.appointmentStorage,JSON.stringify(items))).then(()=>render());
+  hydratePatients();
 })();

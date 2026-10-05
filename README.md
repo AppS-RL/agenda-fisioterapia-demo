@@ -14,6 +14,8 @@ Aplicación unificada para presentar un sistema de reservaciones y administraci�
 - Registro local de citas.
 - Confirmación mediante WhatsApp.
 - Agenda administrativa completa para consultar, editar, reprogramar o cancelar citas.
+- Expedientes de pacientes sincronizados con Google Sheets mediante el mismo servicio de la agenda.
+- Diagnóstico, tratamiento y paquetes de 5 o 10 sesiones con control de sesiones restantes.
 - Envío de datos bancarios por WhatsApp.
 - Diseño adaptable para celular y computadora.
 - Colorimetría número 4 aplicada en toda la experiencia.

@@ -15,10 +15,20 @@
     return result;
   }
 
-  async function list(){
+  async function listRecords(){
     if(!ready())return null;
     const result=await request(`${config.apiUrl}?action=list`);
     return Array.isArray(result.appointments)?result.appointments:[];
+  }
+
+  async function list(){
+    const records=await listRecords();
+    return Array.isArray(records)?records.filter(item=>item?.recordType!=="patient"):records;
+  }
+
+  async function listPatients(){
+    const records=await listRecords();
+    return Array.isArray(records)?records.filter(item=>item?.recordType==="patient"):records;
   }
 
   async function availability(){
@@ -71,5 +81,25 @@
         return [];
       }
     }
+  };
+
+  const patientPayload=patient=>({
+    ...patient,
+    recordType:"patient",
+    area:"Paciente",
+    status:"Expediente",
+    notes:[
+      patient.diagnosis?`Diagnóstico: ${patient.diagnosis}`:"",
+      patient.treatment?`Tratamiento: ${patient.treatment}`:"",
+      Number(patient.packageSize)?`Paquete: ${patient.packageSize} sesiones · ${Number(patient.sessionsRemaining)||0} restantes`:"Sin paquete activo"
+    ].filter(Boolean).join("\n")
+  });
+
+  window.CloudPatients={
+    ready,
+    isUnlocked:()=>Boolean(token()),
+    list:listPatients,
+    upsert:patient=>send("upsert",patientPayload(patient)),
+    remove:id=>send("delete",{id})
   };
 })();
