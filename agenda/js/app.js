@@ -62,7 +62,7 @@
   function timesForDate(iso){
     const day=fromISO(iso).getDay();
     if(day===1||day===5)return hourlyTimes(9,20);
-    if(day===3)return hourlyTimes(9,17);
+    if(day===3)return["19:00","20:00"];
     if(day===2||day===4)return hourlyTimes(7,20);
     return[];
   }
