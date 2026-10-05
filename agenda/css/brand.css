@@ -57,3 +57,14 @@ dialog::backdrop{background:#392c3180}
 .service-row .remove-service{background:#e8f4e6;color:#27546b}
 .today-btn{background:#b4e0ee}.appointment-item:hover{border-color:#9dccd0;box-shadow:0 8px 22px #27546b12}
 .message-btn{background:#dcefd9;color:#27546b}input,select,textarea{background:#f8fcfd}dialog::backdrop{background:#193d4d80}
+
+.check-row{display:flex;align-items:center;gap:10px;padding:11px 13px;border:1px solid var(--line);border-radius:12px;background:var(--cream)}
+.check-row input{width:18px;height:18px;margin:0}.check-row span{color:var(--ink);font-weight:600}
+.package-banner{display:grid;gap:4px;padding:14px 16px;border:1px solid #9dcfa4;border-radius:14px;background:#e8f5e7;color:var(--wine2)}
+.package-banner span,.package-banner small{color:var(--muted)}.package-inline{color:var(--green)!important;font-weight:700}
+.dialog-title-row{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}.dialog-title-row h2{margin:0}
+.patients-dialog{width:min(94vw,760px)}.patient-list{display:grid;gap:10px;margin-top:18px}
+.patient-card{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:15px;border:1px solid var(--line);border-radius:14px;background:var(--cream)}
+.patient-card strong,.patient-card span,.patient-card small{display:block}.patient-card span,.patient-card small{margin-top:3px;color:var(--muted);font-size:12px}.patient-card .package-active{color:var(--green);font-weight:700}
+.package-fields{margin:0;padding:16px;border:1px solid var(--line);border-radius:14px}.package-fields legend{padding:0 7px;color:var(--wine);font-size:12px;font-weight:700}
+@media(max-width:620px){.dialog-title-row,.patient-card{align-items:stretch;flex-direction:column}}

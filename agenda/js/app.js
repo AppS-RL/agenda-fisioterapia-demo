@@ -1,84 +1,335 @@
-const CONFIG={business:"Aquí podría ir el nombre de tu consultorio",address:"Aquí podría ir tu ubicación",mapUrl:"Aquí podría ir el enlace de tu ubicación",bank:"Aquí podrían ir tus datos bancarios",storage:"demoFisioAppointments"};
-const AGENDA_ROOT=window.__agendaRoot||document;
-if(window.__agendaClose)AGENDA_ROOT.querySelectorAll('.brand,.back-site-link,.embedded-back').forEach(link=>link.onclick=event=>{event.preventDefault();window.__agendaClose()});
-const SERVICES=[{id:"assessment_initial",area:"hands",name:"Valoración inicial"},{id:"assessment_followup",area:"hands",name:"Consulta de seguimiento"},{id:"assessment_functional",area:"hands",name:"Evaluación funcional y postural"},{id:"therapy_musculoskeletal",area:"feet",name:"Fisioterapia musculoesquelética"},{id:"therapy_sports",area:"feet",name:"Rehabilitación deportiva"},{id:"therapy_postoperative",area:"feet",name:"Rehabilitación postoperatoria"},{id:"therapy_neurological",area:"feet",name:"Fisioterapia neurológica"},{id:"therapy_geriatric",area:"feet",name:"Fisioterapia geriátrica"},{id:"therapy_manual",area:"feet",name:"Terapia manual"},{id:"therapy_massage",area:"feet",name:"Masaje terapéutico"},{id:"therapy_dry_needling",area:"feet",name:"Punción seca"},{id:"therapy_home",area:"feet",name:"Rehabilitación a domicilio"}];
-const WEEKDAY_TIMES=["10:30","12:30","16:00","18:00"],SATURDAY_TIMES=["10:00","11:30"];
-const RETENTION_MONTHS=12;
-const $=selector=>AGENDA_ROOT.querySelector(selector),$$=selector=>[...AGENDA_ROOT.querySelectorAll(selector)];
-const pad=n=>String(n).padStart(2,"0");
-const toISO=date=>`${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`;
-const fromISO=value=>{const [y,m,d]=value.split("-").map(Number);return new Date(y,m-1,d)};
-const phone=value=>String(value||"").replace(/\D/g,"");
-const money=value=>new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",maximumFractionDigits:0}).format(Number(value)||0);
-const escapeHTML=value=>String(value??"").replace(/[&<>'"]/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char]));
-const uid=()=>crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`;
-const getService=id=>SERVICES.find(item=>item.id===id)||{name:"Servicio"};
-const legacyServices=item=>{if(Array.isArray(item.services)&&item.services.length)return item.services;const result=[];if(item.area==="both"){if(item.serviceId)result.push({id:item.serviceId,area:"hands",mode:item.mode||"",finish:item.finish||""});if(item.feetServiceId)result.push({id:item.feetServiceId,area:"feet",mode:item.feetMode||"",finish:item.feetFinish||""})}else if(item.serviceId)result.push({id:item.serviceId,area:item.area||getService(item.serviceId).area||"hands",mode:item.area==="feet"?item.feetMode||item.mode||"":item.mode||"",finish:item.area==="feet"?item.feetFinish||item.finish||"":item.finish||""});return result};
-const serviceItemLabel=entry=>`${entry.area==="feet"?"Tratamiento":"Valoración"}: ${getService(entry.id).name}`;
-const serviceLabel=item=>legacyServices(item).map(serviceItemLabel).join(" · ")||"Servicio";
-function serviceOptions(area,selected=""){return SERVICES.filter(item=>item.area===area&&(item.selectable!==false||item.id===selected)).map(item=>`<option value="${item.id}"${item.id===selected?" selected":""}>${item.name}</option>`).join("")}
-function serviceRow(entry={},index=0){const appointmentArea=$("#areaSelect").value,area=appointmentArea==="both"?(entry.area||"hands"):appointmentArea,id=entry.id&&getService(entry.id).area===area?entry.id:"",areaControl=appointmentArea==="both"?`<label>Tipo<select class="row-area"><option value="hands"${area==="hands"?" selected":""}>Valoración</option><option value="feet"${area==="feet"?" selected":""}>Tratamiento</option></select></label>`:`<input class="row-area" type="hidden" value="${area}"><label>Tipo<input value="${area==="feet"?"Tratamiento":"Valoración"}" disabled></label>`;return `<div class="service-row" data-service-row>${areaControl}<label>Servicio<select class="row-service" required>${serviceOptions(area,id)}</select></label><label class="row-mode-wrap" hidden>Modalidad<select class="row-mode"><option value=""></option></select></label><label class="row-finish-wrap" hidden>Detalle<select class="row-finish"><option value=""></option></select></label><button class="remove-service" type="button" aria-label="Quitar servicio">Quitar</button></div>`}
-function addServiceRow(entry={}){const wrap=$("#serviceRows"),box=document.createElement("div");box.innerHTML=serviceRow(entry,wrap.children.length);const row=box.firstElementChild;wrap.append(row);updateServiceRow(row);if(entry.mode)row.querySelector(".row-mode").value=entry.mode;if(entry.finish)row.querySelector(".row-finish").value=entry.finish;refreshRemoveButtons()}
-function refreshRemoveButtons(){$$("#serviceRows [data-service-row]").forEach((row,index,rows)=>row.querySelector(".remove-service").disabled=rows.length===1)}
-function resetServiceRows(entries=[]){$("#serviceRows").innerHTML="";(entries.length?entries:[{area:$("#areaSelect").value==="feet"?"feet":"hands"}]).forEach(addServiceRow)}
-function updateServiceRow(row){const area=row.querySelector(".row-area").value,select=row.querySelector(".row-service"),selected=select.value;select.innerHTML=serviceOptions(area,getService(selected).area===area?selected:"");row.querySelector(".row-mode-wrap").hidden=true;row.querySelector(".row-finish-wrap").hidden=true}
-function collectServiceRows(){return $$("#serviceRows [data-service-row]").map(row=>({id:row.querySelector(".row-service").value,area:row.querySelector(".row-area").value,mode:"",finish:""})).filter(entry=>entry.id)}
-let selectedDate=new Date();
-let activeMessageAppointmentId="";
-let activeSummaryPeriod="week";
+(()=>{
+  const CONFIG={
+    business:"Aquí podría ir el nombre de tu consultorio",
+    address:"Aquí podría ir tu ubicación",
+    mapUrl:"Aquí podría ir el enlace de tu ubicación",
+    bank:"Aquí podrían ir tus datos bancarios",
+    appointmentStorage:"demoFisioAppointments",
+    patientStorage:"demoFisioPatients"
+  };
+  const AGENDA_ROOT=window.__agendaRoot||document;
+  const $=selector=>AGENDA_ROOT.querySelector(selector);
+  const $$=selector=>[...AGENDA_ROOT.querySelectorAll(selector)];
+  const AREAS={valuation:"Valoración",followup:"Seguimiento",valuation_treatment:"Valoración y tratamiento",revaluation:"Revaloración",hands:"Valoración",feet:"Tratamiento",both:"Valoración y tratamiento"};
+  const SERVICES=[
+    {id:"first_time",name:"Primera vez"},
+    {id:"followup",name:"Seguimiento"},
+    {id:"geriatric",name:"Geriátrica"},
+    {id:"sports",name:"Deportiva"},
+    {id:"neurological",name:"Neurológico"},
+    {id:"home",name:"A domicilio"},
+    {id:"discharge",name:"Descarga"}
+  ];
+  const RETENTION_MONTHS=12;
+  let selectedDate=new Date();
+  let activeMessageAppointmentId="";
+  let activeSummaryPeriod="week";
 
-function getAppointments(){try{return JSON.parse(localStorage.getItem(CONFIG.storage))||[]}catch{return[]}}
-function saveAppointments(items){const before=getAppointments(),beforeById=new Map(before.map(item=>[item.id,item])),afterIds=new Set(items.map(item=>item.id));localStorage.setItem(CONFIG.storage,JSON.stringify(items));items.forEach(item=>{const old=beforeById.get(item.id);if(!old||old.updatedAt!==item.updatedAt)window.CloudAppointments?.upsert(item).catch(()=>{})});before.forEach(item=>{if(!afterIds.has(item.id))window.CloudAppointments?.remove(item.id).catch(()=>{})})}
-function retentionCutoffISO(){const cutoff=new Date();cutoff.setMonth(cutoff.getMonth()-RETENTION_MONTHS);return toISO(cutoff)}
-function isCurrentAppointment(item){return !item?.date||item.date>=retentionCutoffISO()}
-function pruneLocalAppointments(){const current=getAppointments().filter(isCurrentAppointment);saveAppointments(current);return current}
-function backupCountText(count){return `${count} ${count===1?"cita guardada":"citas guardadas"}`}
-function downloadBackup(){const appointments=getAppointments(),payload={app:"Agenda demo",version:1,exportedAt:new Date().toISOString(),appointments},blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),link=document.createElement("a");link.href=url;link.download=`agenda-demo-respaldo-${toISO(new Date())}.json`;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast("Respaldo descargado")}
-function validBackupAppointment(item){return item&&typeof item==="object"&&typeof item.name==="string"&&item.name.trim()&&phone(item.phone).length>=10&&/^\d{4}-\d{2}-\d{2}$/.test(item.date)&&timesForDate(item.date).includes(item.time)&&typeof item.serviceId==="string"}
-async function restoreBackup(file){const error=$("#backupError");error.textContent="";try{const parsed=JSON.parse(await file.text()),imported=Array.isArray(parsed)?parsed:parsed.appointments;if(!Array.isArray(imported))throw new Error("Formato inválido");const valid=imported.filter(validBackupAppointment).map(item=>({...item,id:item.id||uid(),name:item.name.trim(),phone:phone(item.phone),price:Math.max(0,Number(item.price)||0),deposit:Math.max(0,Number(item.deposit)||0)})).filter(isCurrentAppointment);if(!valid.length)throw new Error("Sin citas válidas");const merged=new Map(pruneLocalAppointments().map(item=>[item.id,item]));valid.forEach(item=>merged.set(item.id,item));const items=[...merged.values()];saveAppointments(items);$("#backupAppointmentCount").textContent=backupCountText(merged.size);render();toast(`${valid.length} ${valid.length===1?"cita recuperada":"citas recuperadas"}`)}catch{error.textContent="No pudimos leer este respaldo. Selecciona un archivo generado por esta agenda."}finally{$("#importBackupInput").value=""}}
-function formatDate(iso,options={weekday:"long",day:"numeric",month:"long"}){return fromISO(iso).toLocaleDateString("es-MX",options)}
-function formatTime(value){const [hours,minutes]=value.split(":").map(Number),period=hours<12?"a. m.":"p. m.",hour=hours%12||12;return `${hour}:${pad(minutes)} ${period}`}
-function timesForDate(iso){const day=fromISO(iso).getDay();return day===6?SATURDAY_TIMES:day>=1&&day<=5?WEEKDAY_TIMES:[]}
-function isWorkingDay(iso){return timesForDate(iso).length>0}
-function nextWorkingDate(date){const result=new Date(date);while(result.getDay()===0)result.setDate(result.getDate()+1);return result}
-function toast(message){const el=$("#toast");el.textContent=message;el.classList.add("show");setTimeout(()=>el.classList.remove("show"),2400)}
-function waLink(number,message){const digits=phone(number),international=digits.length===10?`52${digits}`:digits;return `https://wa.me/${international}?text=${encodeURIComponent(message)}`}
-function openWhatsApp(number,message){window.open(waLink(number,message),"_blank","noopener,noreferrer")}
-function appointmentsFor(date){return getAppointments().filter(item=>item.date===date).sort((a,b)=>a.time.localeCompare(b.time))}
-function availableTimes(date,ignoreId=""){const scheduled=timesForDate(date);if(!scheduled.length)return[];const occupied=getAppointments().filter(item=>item.date===date&&item.id!==ignoreId).map(item=>item.time);return scheduled.filter(time=>!occupied.includes(time))}
-function summaryDates(period){const start=new Date(selectedDate),end=new Date(selectedDate);if(period==="month"){start.setDate(1);end.setMonth(end.getMonth()+1,0)}else{const mondayOffset=(start.getDay()+6)%7;start.setDate(start.getDate()-mondayOffset);end.setTime(start.getTime());end.setDate(end.getDate()+6)}return{start,end}}
-function summaryItems(period){const{start,end}=summaryDates(period),startISO=toISO(start),endISO=toISO(end);return getAppointments().filter(item=>item.date>=startISO&&item.date<=endISO).sort((a,b)=>`${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`))}
-function renderSummary(period=activeSummaryPeriod){activeSummaryPeriod=period;const items=summaryItems(period),{start,end}=summaryDates(period),income=items.reduce((total,item)=>total+(Number(item.price)||0),0),deposits=items.reduce((total,item)=>total+(Number(item.deposit)||0),0),balance=items.reduce((total,item)=>total+Math.max((Number(item.price)||0)-(Number(item.deposit)||0),0),0);$$("[data-summary-period]").forEach(button=>button.classList.toggle("active",button.dataset.summaryPeriod===period));$("#summaryRange").textContent=period==="month"?start.toLocaleDateString("es-MX",{month:"long",year:"numeric"}):`${start.toLocaleDateString("es-MX",{day:"numeric",month:"long"})} — ${end.toLocaleDateString("es-MX",{day:"numeric",month:"long",year:"numeric"})}`;$("#summaryAppointments").textContent=items.length;$("#summaryIncome").textContent=money(income);$("#summaryDeposits").textContent=money(deposits);$("#summaryBalance").textContent=money(balance);$("#summaryList").innerHTML=items.length?items.map(item=>`<article class="summary-entry"><time>${escapeHTML(formatDate(item.date,{weekday:"short",day:"numeric",month:"short"}))}<small>${escapeHTML(formatTime(item.time))}</small></time><div><strong>${escapeHTML(item.name)}</strong><small>${escapeHTML(serviceLabel(item))}</small></div><strong>${money(item.price)}</strong></article>`).join(""):`<div class="summary-empty">No hay citas registradas en este periodo.</div>`}
+  if(window.__agendaClose){
+    AGENDA_ROOT.querySelectorAll(".brand,.back-site-link,.embedded-back").forEach(link=>link.onclick=event=>{event.preventDefault();window.__agendaClose()});
+  }
 
-function render(){const iso=toISO(selectedDate),items=appointmentsFor(iso),todayISO=toISO(new Date()),income=items.reduce((total,item)=>total+(Number(item.price)||0),0);$("#datePicker").value=iso;$("#dateTitle").textContent=formatDate(iso,{weekday:"long",day:"numeric",month:"long",year:"numeric"});$("#appointmentCount").textContent=items.length;$("#dayIncome").textContent=money(income);const now=`${pad(new Date().getHours())}:${pad(new Date().getMinutes())}`,upcoming=items.find(item=>iso!==todayISO||item.time>=now);$("#nextTime").textContent=upcoming?formatTime(upcoming.time):"—";$("#appointmentList").innerHTML=items.length?items.map(cardTemplate).join(""):`<div class="empty-state"><span>♡</span><strong>Tu día está libre</strong><p>No hay citas registradas para esta fecha.</p><button class="secondary-btn" data-new>Crea una cita</button></div>`}
-function cardTemplate(item){const deposit=Number(item.deposit)||0;return `<article class="appointment-item"><div class="appointment-time">${escapeHTML(formatTime(item.time))}<small>${item.time<"12:00"?"mañana":item.time<"18:00"?"tarde":"noche"}</small></div><span class="service-line"></span><div class="appointment-info"><h3>${escapeHTML(item.name)}</h3><p>${escapeHTML(serviceLabel(item))} · ${escapeHTML(item.phone)}</p><p>${item.notes?escapeHTML(item.notes):"Sin notas"}</p></div><div class="appointment-meta"><div class="appointment-amount"><span class="price">${money(item.price)}</span>${deposit?`<small>Anticipo: ${money(deposit)}</small>`:""}</div><button class="message-btn" data-message="${item.id}">WhatsApp</button><button class="more-btn" data-edit="${item.id}">Editar</button></div></article>`}
-function fillTimes(date,selected="",ignoreId=""){let times=availableTimes(date,ignoreId);if(selected&&!times.includes(selected))times=[...times,selected].sort();$("#appointmentTime").innerHTML=times.length?times.map(time=>`<option value="${time}"${time===selected?" selected":""}>${formatTime(time)}</option>`).join(""):`<option value="">${isWorkingDay(date)?"Sin horarios disponibles":"No se trabaja los domingos"}</option>`}
-function openNewAppointment(){const appointmentDay=nextWorkingDate(selectedDate),iso=toISO(appointmentDay);$("#appointmentForm").reset();$("#appointmentId").value="";$("#formEyebrow").textContent="Nueva cita";$("#formTitle").textContent="Agendar cita";$("#appointmentDate").value=iso;$("#deleteBtn").hidden=true;$("#formError").textContent="";$("#areaSelect").value="hands";resetServiceRows([{id:"assessment_initial",area:"hands",mode:"",finish:""}]);fillTimes(iso);$("#appointmentDialog").showModal()}
-function openEditAppointment(id){const item=getAppointments().find(entry=>entry.id===id);if(!item)return;const services=legacyServices(item),areas=new Set(services.map(entry=>entry.area)),area=areas.size>1?"both":areas.has("feet")?"feet":"hands";$("#appointmentId").value=item.id;$("#clientName").value=item.name;$("#clientPhone").value=item.phone;$("#areaSelect").value=area;resetServiceRows(services);$("#appointmentDate").value=item.date;$("#appointmentPrice").value=item.price||"";$("#appointmentDeposit").value=item.deposit||"";$("#appointmentNotes").value=item.notes||"";$("#formEyebrow").textContent="Editar cita";$("#formTitle").textContent=item.name;$("#deleteBtn").hidden=false;$("#formError").textContent="";fillTimes(item.date,item.time,item.id);$("#appointmentDialog").showModal()}
-function saveAppointment(event){event.preventDefault();const id=$("#appointmentId").value,name=$("#clientName").value.trim(),number=phone($("#clientPhone").value),area=$("#areaSelect").value,date=$("#appointmentDate").value,time=$("#appointmentTime").value,services=collectServiceRows(),price=Math.max(0,Number($("#appointmentPrice").value)||0),deposit=Math.max(0,Number($("#appointmentDeposit").value)||0),error=$("#formError"),items=getAppointments(),current=items.find(item=>item.id===id),wasRescheduled=Boolean(current&&(current.date!==date||current.time!==time)),reschedules=(Number(current?.reschedules)||0)+(wasRescheduled?1:0),first=services[0]||{},firstHand=services.find(entry=>entry.area==="hands"),firstFoot=services.find(entry=>entry.area==="feet");if(date&&!isWorkingDay(date)){error.textContent="Solo se pueden agendar citas de lunes a sábado.";return}if(!name||number.length<10||!date||!time||!services.length){error.textContent="Completa el nombre, un WhatsApp válido, al menos un servicio, fecha y hora.";return}if(area==="both"&&(!firstHand||!firstFoot)){error.textContent="Agrega por lo menos un servicio de manos y uno de pies.";return}if(deposit>price&&price>0){error.textContent="El anticipo no puede ser mayor que el precio acordado.";return}if(reschedules>2){error.textContent="Esta cita ya alcanzó el máximo de dos reprogramaciones.";return}if(!availableTimes(date,id).includes(time)){error.textContent="Ese horario ya está ocupado. Elige otro, por favor.";fillTimes(date,"",id);return}const record={...current,id:id||uid(),name,phone:number,area,services,serviceId:first.id,feetServiceId:firstFoot?.id||"",mode:firstHand?.mode||"",finish:firstHand?.finish||"",feetMode:firstFoot?.mode||"",feetFinish:firstFoot?.finish||"",date,time,price,deposit,status:current?.status||"Programada",reschedules,notes:$("#appointmentNotes").value.trim(),createdAt:current?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()};const updatedItems=id?items.map(item=>item.id===id?record:item):[...items,record];saveAppointments(updatedItems);selectedDate=fromISO(date);$("#appointmentDialog").close();render();toast(id?"Cita actualizada":"Cita guardada")}
-function deleteAppointment(){const id=$("#appointmentId").value;if(!id||!confirm("¿Quieres cancelar y eliminar esta cita?"))return;saveAppointments(getAppointments().filter(item=>item.id!==id));$("#appointmentDialog").close();render();toast("Cita cancelada")}
-function financialMessage(item){const price=Number(item.price)||0,deposit=Number(item.deposit)||0,details=[];if(price)details.push(`💵 Precio acordado: ${money(price)}`);if(deposit)details.push(`💳 Anticipo recibido: ${money(deposit)}`);if(price&&deposit)details.push(`💰 Saldo pendiente: ${money(Math.max(price-deposit,0))}`);return details.length?`\n${details.join("\n")}`:""}
-function confirmationMessage(item){return `¡Hola, ${item.name}! 💖\n\nTu cita en ${CONFIG.business} está confirmada:\n\n📅 ${formatDate(item.date,{weekday:"long",day:"numeric",month:"long",year:"numeric"})}\n🕐 ${formatTime(item.time)}\n✨ ${serviceLabel(item)}${financialMessage(item)}\n\n📍 ${CONFIG.address}\n🗺️ Ubicación: ${CONFIG.mapUrl}\n\nTe recordamos nuestras políticas:\n• Para cancelar o reagendar, avísanos con al menos 48 horas de anticipación.\n• Después de 10 minutos de retraso, la cita será cancelada y el anticipo no será reembolsable.\n• Los anticipos no son reembolsables; avisando con al menos 48 horas de anticipación, pueden conservarse para una nueva fecha.\n• Una cita puede reagendarse un máximo de dos veces.\n\n¡Gracias por elegirnos! Te esperamos ✨`}
-function reminderMessage(item){return `¡Hola, ${item.name}! 💖\n\nTe recordamos tu próxima cita en ${CONFIG.business}:\n\n📅 ${formatDate(item.date,{weekday:"long",day:"numeric",month:"long",year:"numeric"})}\n🕐 ${formatTime(item.time)}\n✨ ${serviceLabel(item)}${financialMessage(item)}\n\n📍 ${CONFIG.address}\n🗺️ ${CONFIG.mapUrl}\n\nSi necesitas hacer algún cambio, avísanos con al menos 48 horas de anticipación. ¡Te esperamos!`}
-function cancellationMessage(item){return `Hola, ${item.name}. Te informamos que tu cita en ${CONFIG.business} del ${formatDate(item.date,{weekday:"long",day:"numeric",month:"long",year:"numeric"})} a las ${formatTime(item.time)} ha sido cancelada.\n\nSi deseas elegir una nueva fecha, con gusto podemos ayudarte a reagendar. 💖`}
-function openMessageDialog(item){activeMessageAppointmentId=item.id;$("#messageDialogTitle").textContent=`Mensaje para ${item.name}`;$("#messageDialog").showModal()}
+  const pad=value=>String(value).padStart(2,"0");
+  const toISO=date=>`${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`;
+  const fromISO=value=>{const[y,m,d]=String(value).split("-").map(Number);return new Date(y,m-1,d)};
+  const phone=value=>String(value||"").replace(/\D/g,"");
+  const uid=()=>crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`;
+  const money=value=>new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN",maximumFractionDigits:0}).format(Number(value)||0);
+  const escapeHTML=value=>String(value??"").replace(/[&<>'"]/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char]));
+  const readList=key=>{try{const value=JSON.parse(localStorage.getItem(key));return Array.isArray(value)?value:[]}catch{return[]}};
+  const getAppointments=()=>readList(CONFIG.appointmentStorage);
+  const getPatients=()=>readList(CONFIG.patientStorage);
+  const savePatients=items=>localStorage.setItem(CONFIG.patientStorage,JSON.stringify(items));
+  const getPatient=id=>getPatients().find(item=>item.id===id);
+  const getService=id=>SERVICES.find(item=>item.id===id)||{id:id||"service",name:legacyServiceName(id)};
 
-$("#todayText").textContent=new Date().toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
-$("#areaSelect").value="hands";resetServiceRows([{id:"assessment_initial",area:"hands",mode:"",finish:""}]);
-$("#newAppointmentBtn").onclick=openNewAppointment;$("#appointmentForm").onsubmit=saveAppointment;$("#deleteBtn").onclick=deleteAppointment;
-$("#appointmentList").onclick=event=>{const add=event.target.closest("[data-new]"),edit=event.target.closest("[data-edit]"),message=event.target.closest("[data-message]");if(add)openNewAppointment();if(edit)openEditAppointment(edit.dataset.edit);if(message){const item=getAppointments().find(entry=>entry.id===message.dataset.message);if(item)openMessageDialog(item)}};
-$("#messageDialog").onclick=event=>{const option=event.target.closest("[data-message-type]");if(!option)return;const item=getAppointments().find(entry=>entry.id===activeMessageAppointmentId);if(!item){$("#messageDialog").close();toast("No encontramos esa cita");return}const messages={confirmation:confirmationMessage,reminder:reminderMessage,cancellation:cancellationMessage},buildMessage=messages[option.dataset.messageType];if(!buildMessage)return;openWhatsApp(item.phone,buildMessage(item));$("#messageDialog").close()};
-$("#appointmentDate").onchange=()=>fillTimes($("#appointmentDate").value,"",$("#appointmentId").value);
-$("#addServiceBtn").onclick=()=>addServiceRow({area:$("#areaSelect").value==="feet"?"feet":"hands"});
-$("#areaSelect").onchange=()=>resetServiceRows([{area:$("#areaSelect").value==="feet"?"feet":"hands"}]);
-$("#serviceRows").onclick=event=>{const remove=event.target.closest(".remove-service");if(remove&&!remove.disabled){remove.closest("[data-service-row]").remove();refreshRemoveButtons()}};
-$("#serviceRows").onchange=event=>{const row=event.target.closest("[data-service-row]");if(row&&(event.target.matches(".row-area")||event.target.matches(".row-service")))updateServiceRow(row)};
-$("#previousDay").onclick=()=>{selectedDate.setDate(selectedDate.getDate()-1);render()};$("#nextDay").onclick=()=>{selectedDate.setDate(selectedDate.getDate()+1);render()};$("#todayBtn").onclick=()=>{selectedDate=new Date();render()};$("#datePicker").onchange=()=>{selectedDate=fromISO($("#datePicker").value);render()};
-$("#paymentBtn").onclick=()=>{$("#paymentForm").reset();$("#paymentDialog").showModal()};$("#policiesBtn").onclick=()=>$("#policiesDialog").showModal();
-$("#summaryBtn").onclick=()=>{activeSummaryPeriod="week";renderSummary("week");$("#summaryDialog").showModal()};
-$("#summaryDialog").onclick=event=>{const periodButton=event.target.closest("[data-summary-period]");if(periodButton)renderSummary(periodButton.dataset.summaryPeriod)};
-$("#backupBtn").onclick=()=>{$("#backupAppointmentCount").textContent=backupCountText(getAppointments().length);$("#backupError").textContent="";$("#importBackupInput").value="";$("#backupDialog").showModal()};
-$("#exportBackupBtn").onclick=downloadBackup;
-$("#importBackupInput").onchange=event=>{const[file]=event.target.files;if(file)restoreBackup(file)};
-$("#paymentForm").onsubmit=event=>{event.preventDefault();const number=phone($("#paymentPhone").value);if(number.length<10){toast("Escribe un WhatsApp válido");return}openWhatsApp(number,`Hola! Buen día ☀️\n\nTe compartimos los datos para transferencia de ${CONFIG.business}\n\n${CONFIG.bank}\n\nCuando realices tu transferencia, por favor envíanos tu comprobante. Gracias 💖`);$("#paymentDialog").close()};
-$$('[data-close-dialog]').forEach(button=>button.onclick=()=>button.closest("dialog").close());pruneLocalAppointments();render();window.refreshAgenda=render;window.CloudAppointments?.hydrate(items=>localStorage.setItem(CONFIG.storage,JSON.stringify(items))).then(()=>render());
+  function legacyServiceName(id){
+    const labels={assessment_initial:"Primera vez",assessment_followup:"Seguimiento",assessment_functional:"Valoración",therapy_sports:"Deportiva",therapy_neurological:"Neurológico",therapy_geriatric:"Geriátrica",therapy_home:"A domicilio",therapy_massage:"Descarga",therapy_manual:"Descarga",therapy_musculoskeletal:"Seguimiento"};
+    return labels[id]||"Servicio";
+  }
+  function normalizeArea(value){const legacy={hands:"valuation",feet:"valuation_treatment",both:"valuation_treatment"};return legacy[value]||(["valuation","followup","valuation_treatment","revaluation"].includes(value)?value:"valuation")}
+  function normalizeServiceId(value){const legacy={assessment_initial:"first_time",assessment_followup:"followup",assessment_functional:"first_time",therapy_geriatric:"geriatric",therapy_sports:"sports",therapy_neurological:"neurological",therapy_home:"home",therapy_massage:"discharge",therapy_manual:"discharge",therapy_musculoskeletal:"followup",therapy_postoperative:"followup",therapy_dry_needling:"discharge"};return SERVICES.some(item=>item.id===value)?value:legacy[value]||"first_time"}
+  function areaLabel(value){return AREAS[value]||"Valoración"}
+  function serviceLabel(item){return getService(item.serviceId||(item.services&&item.services[0]?.id)).name}
+  function formatDate(iso,options={weekday:"long",day:"numeric",month:"long"}){return fromISO(iso).toLocaleDateString("es-MX",options)}
+  function formatTime(value){const[hours,minutes]=String(value).split(":").map(Number),period=hours<12?"a. m.":"p. m.",hour=hours%12||12;return `${hour}:${pad(minutes)} ${period}`}
+  function hourlyTimes(start,end){return Array.from({length:end-start+1},(_,index)=>`${pad(start+index)}:00`)}
+  function timesForDate(iso){
+    const day=fromISO(iso).getDay();
+    if(day===1||day===5)return hourlyTimes(9,20);
+    if(day===3)return hourlyTimes(9,17);
+    if(day===2||day===4)return hourlyTimes(7,20);
+    return[];
+  }
+  function isWorkingDay(iso){return timesForDate(iso).length>0}
+  function nextWorkingDate(date){const result=new Date(date);while(!timesForDate(toISO(result)).length)result.setDate(result.getDate()+1);return result}
+  function appointmentsFor(date){return getAppointments().filter(item=>item.date===date).sort((a,b)=>a.time.localeCompare(b.time))}
+  function availableTimes(date,ignoreId=""){const occupied=getAppointments().filter(item=>item.date===date&&item.id!==ignoreId).map(item=>item.time);return timesForDate(date).filter(time=>!occupied.includes(time))}
+  function toast(message){const element=$("#toast");element.textContent=message;element.classList.add("show");setTimeout(()=>element.classList.remove("show"),2400)}
+  function waLink(number,message){const digits=phone(number),international=digits.length===10?`52${digits}`:digits;return `https://wa.me/${international}?text=${encodeURIComponent(message)}`}
+  function openWhatsApp(number,message){window.open(waLink(number,message),"_blank","noopener,noreferrer")}
+
+  function saveAppointments(items){
+    const before=getAppointments(),beforeById=new Map(before.map(item=>[item.id,item])),afterIds=new Set(items.map(item=>item.id));
+    localStorage.setItem(CONFIG.appointmentStorage,JSON.stringify(items));
+    items.forEach(item=>{const old=beforeById.get(item.id);if(!old||old.updatedAt!==item.updatedAt)window.CloudAppointments?.upsert(item).catch(()=>{})});
+    before.forEach(item=>{if(!afterIds.has(item.id))window.CloudAppointments?.remove(item.id).catch(()=>{})});
+  }
+  function retentionCutoffISO(){const cutoff=new Date();cutoff.setMonth(cutoff.getMonth()-RETENTION_MONTHS);return toISO(cutoff)}
+  function pruneLocalAppointments(){const current=getAppointments().filter(item=>!item?.date||item.date>=retentionCutoffISO());saveAppointments(current);return current}
+
+  function patientPackageText(patient){
+    const size=Number(patient?.packageSize)||0,remaining=Number(patient?.sessionsRemaining)||0;
+    return size?`Paquete de ${size} sesiones · ${remaining} ${remaining===1?"cita restante":"citas restantes"}`:"Sin paquete activo";
+  }
+  function packageSnapshot(patient){return patient&&Number(patient.packageSize)>0?{packageSize:Number(patient.packageSize),sessionsRemaining:Number(patient.sessionsRemaining)||0}:null}
+  function setPatientPackageRemaining(patientId,value){
+    if(!patientId)return null;
+    const patients=getPatients(),index=patients.findIndex(item=>item.id===patientId);
+    if(index<0)return null;
+    const patient=patients[index],limit=Number(patient.packageSize)||0;
+    patients[index]={...patient,sessionsRemaining:Math.max(0,Math.min(limit,Number(value)||0)),updatedAt:new Date().toISOString()};
+    savePatients(patients);
+    return patients[index];
+  }
+  function consumePackage(patientId){const patient=getPatient(patientId);if(!patient||!Number(patient.packageSize)||Number(patient.sessionsRemaining)<=0)return null;return setPatientPackageRemaining(patientId,Number(patient.sessionsRemaining)-1)}
+  function restorePackage(patientId){const patient=getPatient(patientId);if(!patient||!Number(patient.packageSize))return null;return setPatientPackageRemaining(patientId,Number(patient.sessionsRemaining)+1)}
+
+  function fillPatientOptions(selected=""){
+    const patients=getPatients().sort((a,b)=>a.name.localeCompare(b.name,"es"));
+    $("#appointmentPatient").innerHTML=`<option value="">Paciente nuevo</option>${patients.map(item=>`<option value="${item.id}"${item.id===selected?" selected":""}>${escapeHTML(item.name)} · ${escapeHTML(item.phone)}</option>`).join("")}`;
+  }
+  function renderAppointmentPackage(){
+    const patient=getPatient($("#appointmentPatient").value),banner=$("#appointmentPackage");
+    if(!patient||!Number(patient.packageSize)){banner.hidden=true;banner.innerHTML="";return}
+    const remaining=Number(patient.sessionsRemaining)||0;
+    banner.hidden=false;
+    banner.innerHTML=`<strong>Paquete activo</strong><span>${escapeHTML(patientPackageText(patient))}</span>${remaining?"<small>Al guardar una cita nueva se descontará una sesión.</small>":"<small>El paquete ya no tiene sesiones disponibles.</small>"}`;
+  }
+  function choosePatient(){
+    const patient=getPatient($("#appointmentPatient").value),saveLabel=$("#savePatientLabel");
+    if(!patient){saveLabel.hidden=false;renderAppointmentPackage();return}
+    $("#clientName").value=patient.name||"";
+    $("#clientPhone").value=patient.phone||"";
+    $("#appointmentDiagnosis").value=patient.diagnosis||"";
+    $("#appointmentTreatment").value=patient.treatment||"";
+    saveLabel.hidden=true;
+    renderAppointmentPackage();
+  }
+  function upsertPatientFromAppointment(existingId){
+    const patients=getPatients(),existing=patients.find(item=>item.id===existingId),now=new Date().toISOString();
+    if(!existing&&!$("#savePatientCheck").checked)return null;
+    const record={
+      ...existing,
+      id:existing?.id||uid(),
+      name:$("#clientName").value.trim(),
+      phone:phone($("#clientPhone").value),
+      diagnosis:$("#appointmentDiagnosis").value.trim(),
+      treatment:$("#appointmentTreatment").value.trim(),
+      packageSize:Number(existing?.packageSize)||0,
+      sessionsRemaining:Number(existing?.sessionsRemaining)||0,
+      createdAt:existing?.createdAt||now,
+      updatedAt:now
+    };
+    savePatients(existing?patients.map(item=>item.id===record.id?record:item):[...patients,record]);
+    return record;
+  }
+
+  function fillTimes(date,selected="",ignoreId=""){
+    let times=availableTimes(date,ignoreId);
+    if(selected&&!times.includes(selected))times=[...times,selected].sort();
+    $("#appointmentTime").innerHTML=times.length?times.map(time=>`<option value="${time}"${time===selected?" selected":""}>${formatTime(time)}</option>`).join(""):`<option value="">${isWorkingDay(date)?"Sin horarios disponibles":"No hay atención este día"}</option>`;
+  }
+  function resetAppointmentForm(){
+    $("#appointmentForm").reset();
+    $("#appointmentId").value="";
+    $("#formEyebrow").textContent="Nueva cita";
+    $("#formTitle").textContent="Agendar cita";
+    $("#deleteBtn").hidden=true;
+    $("#formError").textContent="";
+    $("#savePatientCheck").checked=true;
+    $("#savePatientLabel").hidden=false;
+    $("#areaSelect").value="valuation";
+    fillPatientOptions();
+    renderAppointmentPackage();
+  }
+  function openNewAppointment(){
+    resetAppointmentForm();
+    const date=nextWorkingDate(selectedDate),iso=toISO(date);
+    $("#appointmentDate").value=iso;
+    fillTimes(iso);
+    $("#appointmentDialog").showModal();
+  }
+  function openEditAppointment(id){
+    const item=getAppointments().find(entry=>entry.id===id);if(!item)return;
+    resetAppointmentForm();
+    $("#appointmentId").value=item.id;
+    fillPatientOptions(item.patientId||"");
+    $("#clientName").value=item.name||"";
+    $("#clientPhone").value=item.phone||"";
+    $("#areaSelect").value=normalizeArea(item.area);
+    $("#serviceSelect").value=normalizeServiceId(item.serviceId||(item.services&&item.services[0]?.id));
+    $("#appointmentDate").value=item.date;
+    $("#appointmentPrice").value=item.price||"";
+    $("#appointmentDiagnosis").value=item.diagnosis||getPatient(item.patientId)?.diagnosis||"";
+    $("#appointmentTreatment").value=item.treatment||getPatient(item.patientId)?.treatment||"";
+    $("#appointmentNotes").value=item.notes||"";
+    $("#formEyebrow").textContent="Editar cita";
+    $("#formTitle").textContent=item.name;
+    $("#deleteBtn").hidden=false;
+    $("#savePatientLabel").hidden=Boolean(item.patientId);
+    fillTimes(item.date,item.time,item.id);
+    renderAppointmentPackage();
+    $("#appointmentDialog").showModal();
+  }
+  function saveAppointment(event){
+    event.preventDefault();
+    const id=$("#appointmentId").value,name=$("#clientName").value.trim(),number=phone($("#clientPhone").value),area=$("#areaSelect").value,serviceId=$("#serviceSelect").value,date=$("#appointmentDate").value,time=$("#appointmentTime").value,price=Math.max(0,Number($("#appointmentPrice").value)||0),error=$("#formError"),items=getAppointments(),current=items.find(item=>item.id===id);
+    if(!name||number.length<10||!area||!serviceId||!date||!time){error.textContent="Completa el paciente, WhatsApp, área, servicio, fecha y hora.";return}
+    if(!isWorkingDay(date)){error.textContent="Elige un día con horario de atención.";return}
+    if(!availableTimes(date,id).includes(time)){error.textContent="Ese horario ya está ocupado. Elige otro, por favor.";fillTimes(date,"",id);return}
+    const wasRescheduled=Boolean(current&&(current.date!==date||current.time!==time)),reschedules=(Number(current?.reschedules)||0)+(wasRescheduled?1:0);
+    if(reschedules>2){error.textContent="Esta cita ya alcanzó el máximo de dos reprogramaciones.";return}
+
+    let patient=upsertPatientFromAppointment($("#appointmentPatient").value);
+    let packageUsed=Boolean(current?.packageUsed),packageSize=Number(current?.packageSize)||0,packageRemainingAfter=Number(current?.packageRemainingAfter)||0;
+    if(current?.packageUsed&&current.patientId&&current.patientId!==patient?.id){restorePackage(current.patientId);packageUsed=false;packageSize=0;packageRemainingAfter=0}
+    if(!current&&patient){const updated=consumePackage(patient.id);if(updated){patient=updated;packageUsed=true;packageSize=Number(updated.packageSize);packageRemainingAfter=Number(updated.sessionsRemaining)}}
+    if(current&&!current.packageUsed&&current.patientId!==patient?.id&&patient){const updated=consumePackage(patient.id);if(updated){patient=updated;packageUsed=true;packageSize=Number(updated.packageSize);packageRemainingAfter=Number(updated.sessionsRemaining)}}
+
+    const now=new Date().toISOString(),record={
+      ...current,
+      id:id||uid(),patientId:patient?.id||"",name,phone:number,area,serviceId,
+      services:[{id:serviceId,area,minutes:60}],duration:60,date,time,price,
+      diagnosis:$("#appointmentDiagnosis").value.trim(),treatment:$("#appointmentTreatment").value.trim(),notes:$("#appointmentNotes").value.trim(),
+      packageUsed,packageSize,packageRemainingAfter,status:current?.status||"Programada",reschedules,
+      createdAt:current?.createdAt||now,updatedAt:now
+    };
+    const updatedItems=id?items.map(item=>item.id===id?record:item):[...items,record];
+    saveAppointments(updatedItems);
+    selectedDate=fromISO(date);
+    $("#appointmentDialog").close();
+    render();
+    toast(id?"Cita actualizada":"Cita guardada");
+  }
+  function deleteAppointment(){
+    const id=$("#appointmentId").value,item=getAppointments().find(entry=>entry.id===id);
+    if(!item||!confirm("¿Quieres cancelar y eliminar esta cita?"))return;
+    if(item.packageUsed&&item.patientId)restorePackage(item.patientId);
+    saveAppointments(getAppointments().filter(entry=>entry.id!==id));
+    $("#appointmentDialog").close();render();toast("Cita cancelada");
+  }
+
+  function openPatients(){renderPatients();$("#patientsDialog").showModal()}
+  function renderPatients(){
+    const query=$("#patientSearch").value.trim().toLocaleLowerCase("es"),patients=getPatients().filter(item=>!query||`${item.name} ${item.phone}`.toLocaleLowerCase("es").includes(query)).sort((a,b)=>a.name.localeCompare(b.name,"es"));
+    $("#patientList").innerHTML=patients.length?patients.map(item=>`<article class="patient-card"><div><strong>${escapeHTML(item.name)}</strong><span>${escapeHTML(item.phone)}</span><small class="${Number(item.packageSize)?"package-active":""}">${escapeHTML(patientPackageText(item))}</small></div><button class="secondary-btn" type="button" data-edit-patient="${item.id}">Ver y modificar</button></article>`).join(""):`<div class="summary-empty">${query?"No encontramos pacientes con esa búsqueda.":"Todavía no hay pacientes guardados."}</div>`;
+  }
+  function openPatientEditor(id=""){
+    const patient=getPatient(id),form=$("#patientForm");form.reset();
+    $("#patientId").value=patient?.id||"";
+    $("#patientName").value=patient?.name||"";
+    $("#patientPhone").value=patient?.phone||"";
+    $("#patientDiagnosis").value=patient?.diagnosis||"";
+    $("#patientTreatment").value=patient?.treatment||"";
+    $("#patientPackage").value=String(Number(patient?.packageSize)||0);
+    $("#patientSessions").value=String(Number(patient?.sessionsRemaining)||0);
+    $("#patientFormEyebrow").textContent=patient?"Expediente del paciente":"Paciente";
+    $("#patientFormTitle").textContent=patient?.name||"Nuevo paciente";
+    $("#deletePatientBtn").hidden=!patient;
+    $("#patientFormError").textContent="";
+    $("#patientEditorDialog").showModal();
+  }
+  function savePatient(event){
+    event.preventDefault();
+    const id=$("#patientId").value,name=$("#patientName").value.trim(),number=phone($("#patientPhone").value),size=Number($("#patientPackage").value)||0,sessions=Number($("#patientSessions").value)||0,error=$("#patientFormError"),patients=getPatients(),current=patients.find(item=>item.id===id);
+    if(!name||number.length<10){error.textContent="Completa el nombre y un WhatsApp válido.";return}
+    if(sessions<0||sessions>size){error.textContent=size?`Las sesiones restantes deben estar entre 0 y ${size}.`:"Selecciona un paquete antes de agregar sesiones.";return}
+    const now=new Date().toISOString(),record={...current,id:id||uid(),name,phone:number,diagnosis:$("#patientDiagnosis").value.trim(),treatment:$("#patientTreatment").value.trim(),packageSize:size,sessionsRemaining:size?sessions:0,createdAt:current?.createdAt||now,updatedAt:now};
+    savePatients(current?patients.map(item=>item.id===record.id?record:item):[...patients,record]);
+    $("#patientEditorDialog").close();renderPatients();fillPatientOptions();render();toast(id?"Paciente actualizado":"Paciente guardado");
+  }
+  function deletePatient(){
+    const id=$("#patientId").value,patient=getPatient(id);if(!patient||!confirm(`¿Quieres eliminar el expediente de ${patient.name}?`))return;
+    savePatients(getPatients().filter(item=>item.id!==id));
+    saveAppointments(getAppointments().map(item=>item.patientId===id?{...item,patientId:"",packageUsed:false,packageSize:0,packageRemainingAfter:0,updatedAt:new Date().toISOString()}:item));
+    $("#patientEditorDialog").close();renderPatients();fillPatientOptions();render();toast("Paciente eliminado");
+  }
+  function syncPackageMaximum(){const size=Number($("#patientPackage").value)||0,input=$("#patientSessions");input.max=String(size);if(!size)input.value="0";else if(Number(input.value)>size||Number(input.value)===0)input.value=String(size)}
+
+  function cardTemplate(item){
+    const patient=getPatient(item.patientId),packageText=patient&&Number(patient.packageSize)?patientPackageText(patient):item.packageUsed?`Paquete de ${item.packageSize} sesiones · ${item.packageRemainingAfter} restantes`:"";
+    return `<article class="appointment-item"><div class="appointment-time">${escapeHTML(formatTime(item.time))}<small>${item.time<"12:00"?"mañana":item.time<"18:00"?"tarde":"noche"}</small></div><span class="service-line"></span><div class="appointment-info"><h3>${escapeHTML(item.name)}</h3><p>${escapeHTML(areaLabel(item.area))} · ${escapeHTML(serviceLabel(item))} · ${escapeHTML(item.phone)}</p>${packageText?`<p class="package-inline">${escapeHTML(packageText)}</p>`:""}${item.diagnosis?`<p>Diagnóstico: ${escapeHTML(item.diagnosis)}</p>`:""}</div><div class="appointment-meta"><div class="appointment-amount"><span class="price">${money(item.price)}</span></div><button class="message-btn" data-message="${item.id}">WhatsApp</button><button class="more-btn" data-edit="${item.id}">Editar</button></div></article>`;
+  }
+  function render(){
+    const iso=toISO(selectedDate),items=appointmentsFor(iso),todayISO=toISO(new Date()),income=items.reduce((total,item)=>total+(Number(item.price)||0),0);
+    $("#datePicker").value=iso;$("#dateTitle").textContent=formatDate(iso,{weekday:"long",day:"numeric",month:"long",year:"numeric"});$("#appointmentCount").textContent=items.length;$("#dayIncome").textContent=money(income);
+    const now=`${pad(new Date().getHours())}:${pad(new Date().getMinutes())}`,upcoming=items.find(item=>iso!==todayISO||item.time>=now);$("#nextTime").textContent=upcoming?formatTime(upcoming.time):"—";
+    $("#appointmentList").innerHTML=items.length?items.map(cardTemplate).join(""):`<div class="empty-state"><span>♡</span><strong>Tu día está libre</strong><p>No hay citas registradas para esta fecha.</p><button class="secondary-btn" data-new>Crea una cita</button></div>`;
+  }
+
+  function summaryDates(period){const start=new Date(selectedDate),end=new Date(selectedDate);if(period==="month"){start.setDate(1);end.setMonth(end.getMonth()+1,0)}else{const mondayOffset=(start.getDay()+6)%7;start.setDate(start.getDate()-mondayOffset);end.setTime(start.getTime());end.setDate(end.getDate()+6)}return{start,end}}
+  function summaryItems(period){const{start,end}=summaryDates(period),startISO=toISO(start),endISO=toISO(end);return getAppointments().filter(item=>item.date>=startISO&&item.date<=endISO).sort((a,b)=>`${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`))}
+  function renderSummary(period=activeSummaryPeriod){
+    activeSummaryPeriod=period;const items=summaryItems(period),{start,end}=summaryDates(period),income=items.reduce((total,item)=>total+(Number(item.price)||0),0),uniquePatients=new Set(items.map(item=>item.patientId||phone(item.phone)).filter(Boolean));
+    $$('[data-summary-period]').forEach(button=>button.classList.toggle("active",button.dataset.summaryPeriod===period));
+    $("#summaryRange").textContent=period==="month"?start.toLocaleDateString("es-MX",{month:"long",year:"numeric"}):`${start.toLocaleDateString("es-MX",{day:"numeric",month:"long"})} — ${end.toLocaleDateString("es-MX",{day:"numeric",month:"long",year:"numeric"})}`;
+    $("#summaryAppointments").textContent=items.length;$("#summaryIncome").textContent=money(income);$("#summaryPatients").textContent=uniquePatients.size;
+    $("#summaryList").innerHTML=items.length?items.map(item=>`<article class="summary-entry"><time>${escapeHTML(formatDate(item.date,{weekday:"short",day:"numeric",month:"short"}))}<small>${escapeHTML(formatTime(item.time))}</small></time><div><strong>${escapeHTML(item.name)}</strong><small>${escapeHTML(serviceLabel(item))}</small></div><strong>${money(item.price)}</strong></article>`).join(""):`<div class="summary-empty">No hay citas registradas en este periodo.</div>`;
+  }
+
+  function financialMessage(item){const price=Number(item.price)||0;return price?`\n💵 Precio acordado: ${money(price)}`:""}
+  function packageMessage(item){const patient=getPatient(item.patientId);if(patient&&Number(patient.packageSize))return `\n🎟️ ${patientPackageText(patient)}`;if(item.packageUsed)return `\n🎟️ Paquete de ${item.packageSize} sesiones · ${item.packageRemainingAfter} restantes`;return""}
+  function confirmationMessage(item){return `¡Hola, ${item.name}!\n\nTu cita en ${CONFIG.business} está confirmada:\n\n📅 ${formatDate(item.date,{weekday:"long",day:"numeric",month:"long",year:"numeric"})}\n🕐 ${formatTime(item.time)}\n✨ ${areaLabel(item.area)} · ${serviceLabel(item)}${financialMessage(item)}${packageMessage(item)}\n\n📍 ${CONFIG.address}\n🗺️ ${CONFIG.mapUrl}\n\nSi necesitas hacer algún cambio, avísanos con al menos 48 horas de anticipación. ¡Te esperamos!`}
+  function reminderMessage(item){return `¡Hola, ${item.name}!\n\nTe recordamos tu próxima cita en ${CONFIG.business}:\n\n📅 ${formatDate(item.date,{weekday:"long",day:"numeric",month:"long",year:"numeric"})}\n🕐 ${formatTime(item.time)}\n✨ ${serviceLabel(item)}${packageMessage(item)}\n\n📍 ${CONFIG.address}\n\n¡Te esperamos!`}
+  function cancellationMessage(item){return `Hola, ${item.name}. Te informamos que tu cita en ${CONFIG.business} del ${formatDate(item.date,{weekday:"long",day:"numeric",month:"long",year:"numeric"})} a las ${formatTime(item.time)} ha sido cancelada.\n\nSi deseas elegir una nueva fecha, con gusto podemos ayudarte a reagendar.`}
+  function openMessageDialog(item){activeMessageAppointmentId=item.id;$("#messageDialogTitle").textContent=`Mensaje para ${item.name}`;$("#messageDialog").showModal()}
+
+  function backupCountText(){const appointments=getAppointments().length,patients=getPatients().length;return `${appointments} ${appointments===1?"cita":"citas"} y ${patients} ${patients===1?"paciente":"pacientes"}`}
+  function downloadBackup(){const payload={app:"Agenda fisioterapia",version:2,exportedAt:new Date().toISOString(),appointments:getAppointments(),patients:getPatients()},blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),link=document.createElement("a");link.href=url;link.download=`agenda-fisioterapia-respaldo-${toISO(new Date())}.json`;document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);toast("Respaldo descargado")}
+  async function restoreBackup(file){
+    const error=$("#backupError");error.textContent="";
+    try{
+      const parsed=JSON.parse(await file.text()),appointments=Array.isArray(parsed)?parsed:parsed.appointments,patients=Array.isArray(parsed?.patients)?parsed.patients:[];
+      if(!Array.isArray(appointments))throw new Error("Formato inválido");
+      const appointmentMap=new Map(getAppointments().map(item=>[item.id,item]));appointments.filter(item=>item&&item.id&&item.date&&item.time).forEach(item=>appointmentMap.set(item.id,item));
+      const patientMap=new Map(getPatients().map(item=>[item.id,item]));patients.filter(item=>item&&item.id&&item.name).forEach(item=>patientMap.set(item.id,item));
+      saveAppointments([...appointmentMap.values()]);savePatients([...patientMap.values()]);$("#backupAppointmentCount").textContent=backupCountText();render();fillPatientOptions();toast("Respaldo restaurado");
+    }catch{error.textContent="No pudimos leer este respaldo. Selecciona un archivo generado por esta agenda."}finally{$("#importBackupInput").value=""}
+  }
+
+  $("#serviceSelect").innerHTML=SERVICES.map(item=>`<option value="${item.id}">${item.name}</option>`).join("");
+  $("#todayText").textContent=new Date().toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+  $("#newAppointmentBtn").onclick=openNewAppointment;
+  $("#appointmentForm").onsubmit=saveAppointment;
+  $("#deleteBtn").onclick=deleteAppointment;
+  $("#appointmentPatient").onchange=choosePatient;
+  $("#appointmentDate").onchange=()=>fillTimes($("#appointmentDate").value,"",$("#appointmentId").value);
+  $("#appointmentList").onclick=event=>{const add=event.target.closest("[data-new]"),edit=event.target.closest("[data-edit]"),message=event.target.closest("[data-message]");if(add)openNewAppointment();if(edit)openEditAppointment(edit.dataset.edit);if(message){const item=getAppointments().find(entry=>entry.id===message.dataset.message);if(item)openMessageDialog(item)}};
+  $("#previousDay").onclick=()=>{selectedDate.setDate(selectedDate.getDate()-1);render()};
+  $("#nextDay").onclick=()=>{selectedDate.setDate(selectedDate.getDate()+1);render()};
+  $("#todayBtn").onclick=()=>{selectedDate=new Date();render()};
+  $("#datePicker").onchange=()=>{selectedDate=fromISO($("#datePicker").value);render()};
+
+  $("#patientsBtn").onclick=openPatients;
+  $("#newPatientBtn").onclick=()=>openPatientEditor();
+  $("#patientSearch").oninput=renderPatients;
+  $("#patientList").onclick=event=>{const button=event.target.closest("[data-edit-patient]");if(button)openPatientEditor(button.dataset.editPatient)};
+  $("#patientForm").onsubmit=savePatient;
+  $("#deletePatientBtn").onclick=deletePatient;
+  $("#patientPackage").onchange=syncPackageMaximum;
+
+  $("#paymentBtn").onclick=()=>{$("#paymentForm").reset();$("#paymentDialog").showModal()};
+  $("#policiesBtn").onclick=()=>$("#policiesDialog").showModal();
+  $("#summaryBtn").onclick=()=>{activeSummaryPeriod="week";renderSummary("week");$("#summaryDialog").showModal()};
+  $("#summaryDialog").onclick=event=>{const button=event.target.closest("[data-summary-period]");if(button)renderSummary(button.dataset.summaryPeriod)};
+  $("#backupBtn").onclick=()=>{$("#backupAppointmentCount").textContent=backupCountText();$("#backupError").textContent="";$("#importBackupInput").value="";$("#backupDialog").showModal()};
+  $("#exportBackupBtn").onclick=downloadBackup;
+  $("#importBackupInput").onchange=event=>{const[file]=event.target.files;if(file)restoreBackup(file)};
+  $("#paymentForm").onsubmit=event=>{event.preventDefault();const number=phone($("#paymentPhone").value);if(number.length<10){toast("Escribe un WhatsApp válido");return}openWhatsApp(number,`Hola, buen día.\n\nTe compartimos los datos para transferencia de ${CONFIG.business}:\n\n${CONFIG.bank}\n\nCuando realices tu transferencia, por favor envíanos tu comprobante. Gracias.`);$("#paymentDialog").close()};
+  $("#messageDialog").onclick=event=>{const option=event.target.closest("[data-message-type]");if(!option)return;const item=getAppointments().find(entry=>entry.id===activeMessageAppointmentId);if(!item){$("#messageDialog").close();toast("No encontramos esa cita");return}const messages={confirmation:confirmationMessage,reminder:reminderMessage,cancellation:cancellationMessage},build=messages[option.dataset.messageType];if(build)openWhatsApp(item.phone,build(item));$("#messageDialog").close()};
+  $$('[data-close-dialog]').forEach(button=>button.onclick=()=>button.closest("dialog").close());
+
+  pruneLocalAppointments();fillPatientOptions();render();window.refreshAgenda=()=>{fillPatientOptions();render()};
+  window.CloudAppointments?.hydrate(items=>localStorage.setItem(CONFIG.appointmentStorage,JSON.stringify(items))).then(()=>render());
+})();
